@@ -1,0 +1,14 @@
+- name: Create GitLab compose directory
+  file:
+    path: /opt/gitlab
+    state: directory
+
+- name: Deploy docker-compose file
+  template:
+    src: docker-compose.yml.j2
+    dest: /opt/gitlab/docker-compose.yml
+
+- name: Start GitLab stack
+  community.docker.docker_compose_v2:
+    project_src: /opt/gitlab
+    state: present

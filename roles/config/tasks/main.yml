@@ -1,0 +1,111 @@
+# 2. Enable import sources (your docker exec script)
+- name: Enable import sources
+  community.docker.docker_container_exec:
+    container: gitlab
+    command: >
+      gitlab-rails runner "
+      app = ApplicationSetting.last;
+      app.update!(
+        import_sources: [
+          'github',
+          'bitbucket',
+          'bitbucket_server',
+          'gitlab_project',
+          'gitea',
+          'git'
+        ]
+      )
+      "
+
+# 3. Get runner registration token
+- name: Get runner token
+  community.docker.docker_container_exec:
+    container: gitlab
+    command: >
+      gitlab-rails runner "puts Gitlab::CurrentSettings.current_application_settings.runners_registration_token"
+  register: runner_token_raw
+
+# 4. Save token
+- name: Set runner token fact
+  set_fact:
+    runner_token: "{{ runner_token_raw.stdout }}"
+
+# 5. Register GitLab Runner
+- name: Register runner
+  community.docker.docker_container_exec:
+    container: gitlab-runner
+    command: >
+      gitlab-runner register
+      --non-interactive
+      --url http://gitlab
+      --registration-token {{ runner_token }}
+      --executor docker
+      --docker-image python:3.11-slim
+      --description "DevSecOps-Auto-Runner"
+      --docker-privileged
+
+# 6. Create Personal Access Token (AUTO)
+- name: Create GitLab PAT
+  community.docker.docker_container_exec:
+    container: gitlab
+    command: >
+      gitlab-rails runner "
+      user = User.find_by_username('root');
+      token = user.personal_access_tokens.create!(
+        name: 'ansible-token',
+        scopes: [:api, :read_api, :read_repository, :write_repository, :sudo],
+        expires_at: Date.today + 365
+      );
+      puts token.token
+      "
+  register: pat_token_raw
+
+
+# 7. Save PAT token
+- set_fact:
+    gitlab_token: "{{ pat_token_raw.stdout }}"
+
+# 8. Create group
+- name: Create devsecops-test group
+  uri:
+    url: "http://10.22.255.62:9500/api/v4/groups"
+    method: POST
+    headers:
+      PRIVATE-TOKEN: "{{ gitlab_token }}"
+    body_format: json
+    body:
+      name: "devsecops-test"
+      path: "devsecops-test"
+      visibility: "private"
+    status_code: [201, 409]
+  register: group
+
+# 9. Get group id (safe)
+- name: Extract group id
+  set_fact:
+    group_id: "{{ group.json.id if group.json is defined else 0 }}"
+
+# 10. Import project
+- name: Import project into group
+  uri:
+    url: "http://10.22.255.62:9500/api/v4/projects"
+    method: POST
+    headers:
+      PRIVATE-TOKEN: "{{ gitlab_token }}"
+    body_format: json
+    body:
+      name: "django-devsecops"
+      import_url: "https://gitlab.practical-devsecops.training/pdso/django.nv.git"
+      namespace_id: "{{ group_id }}"
+    status_code: [201, 409]
+
+- name: Wait for project import to finish
+  uri:
+    url: "http://10.22.255.62:9500/api/v4/projects/devsecops-test%2Fdjango-devsecops"
+    method: GET
+    headers:
+      PRIVATE-TOKEN: "{{ gitlab_token }}"
+  register: project_status
+  retries: 20
+  delay: 10
+  until: project_status.json.import_status == "finished"

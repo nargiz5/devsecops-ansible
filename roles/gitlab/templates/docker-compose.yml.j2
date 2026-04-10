@@ -1,0 +1,51 @@
+version: "3.8"
+
+services:
+
+  gitlab:
+    image: gitlab/gitlab-ce:latest
+    container_name: gitlab
+    restart: always
+    hostname: gitlab.local
+    ports:
+      - "9500:80"
+      - "5002:5005"
+      - "2222:22"
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://10.22.255.62:9500'
+        gitlab_rails['initial_root_password'] = 'devsecops@2026!!'
+        registry_external_url "http://10.22.255.62:5002"
+        registry['enable'] = true
+        registry_nginx['enable'] = true
+        registry_nginx['listen_port'] = 5005
+        gitlab_rails['registry_enabled'] = true
+        gitlab_rails['registry_host'] = "10.22.255.62"
+        gitlab_rails['registry_port'] = 5005
+        gitlab_rails['registry_api_url'] = "http://10.22.255.62:5005"
+        gitlab_rails['packages_enabled'] = true
+        nginx['listen_port'] = 80
+        nginx['listen_addresses'] = ['0.0.0.0']
+        gitlab_rails['dependency_proxy_enabled'] = true
+    volumes:
+      - gitlab_config:/etc/gitlab
+      - gitlab_logs:/var/log/gitlab
+      - gitlab_data:/var/opt/gitlab
+    shm_size: "256m"
+
+  gitlab-runner:
+    image: gitlab/gitlab-runner:latest
+    container_name: gitlab-runner
+    restart: always
+    depends_on:
+      - gitlab
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - runner_config:/etc/gitlab-runner
+
+volumes:
+  gitlab_config:
+  gitlab_logs:
+  gitlab_data:
+  runner_config:
+
