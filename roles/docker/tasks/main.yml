@@ -51,5 +51,34 @@
 
 - name: Login to Docker Hub
   community.docker.docker_login:
-    username: "{{ docker_username }}"
-    password: "{{ docker_password }}"
+    username: "{{ dockerhub_username }}"
+    password: "{{ dockerhub_pat }}"
+
+- name: Define insecure registry
+  set_fact:
+    insecure_registry: "{{ host_ip }}:{{ registry_port }}"
+
+- name: Ensure Docker config directory exists
+  file:
+    path: /etc/docker
+    state: directory
+    mode: '0755'
+
+- name: Configure Docker daemon with insecure registry
+  copy:
+    dest: /etc/docker/daemon.json
+    content: |
+      {
+        "insecure-registries": ["{{ insecure_registry }}"]
+      }
+    mode: '0644'
+
+- name: Restart Docker service
+  systemd:
+    name: docker
+    state: restarted
+    daemon_reload: yes
+- name: Create DevSecOps network
+  community.docker.docker_network:
+    name: devsecops-net
+    state: present

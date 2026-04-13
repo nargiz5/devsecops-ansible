@@ -1,23 +1,266 @@
-- name: Create GitLab compose directory
-  file:
-    path: /opt/gitlab
-    state: directory
+---
+# =========================
+# 1. GET SECRETS FROM VAULT
+# =========================
+- name: Get secrets from Vault
+  uri:
+    url: "{{ vault_url }}/v1/secret/data/devsecops"
+    method: GET
+    headers:
+      X-Vault-Token: "{{ vault_token }}"
+  register: vault_data
 
-- name: Deploy docker-compose file
-  template:
-    src: docker-compose.yml.j2
-    dest: /opt/gitlab/docker-compose.yml
+- name: Set variables
+  set_fact:
+    gitlab_root_password: "{{ vault_data.json.data.data.root_password }}"
+    gitlab_admin_username: "{{ vault_data.json.data.data.admin_username }}"
+    gitlab_admin_password: "{{ vault_data.json.data.data.admin_password }}"
+    gitlab_admin_email: "{{ vault_data.json.data.data.admin_email }}"
+    gitlab_user_username: "{{ vault_data.json.data.data.user_username }}"
+    gitlab_user_password: "{{ vault_data.json.data.data.user_password }}"
+    gitlab_user_email: "{{ vault_data.json.data.data.user_email }}"
+    import_url: "{{ vault_data.json.data.data.import_url }}"
+    import_project_name: "{{ vault_data.json.data.data.import_project_name }}"
 
-- name: Start GitLab stack
-  community.docker.docker_compose_v2:
-    project_src: /opt/gitlab
+# =========================
+# 2. ENSURE NETWORK EXISTS
+# =========================
+- name: Create Docker network
+  community.docker.docker_network:
+    name: devsecops-net
     state: present
 
-- name: Wait for GitLab to be healthy
+# =========================
+# 3. START GITLAB
+# =========================
+- name: Start GitLab container
+  community.docker.docker_container:
+    name: gitlab
+    image: gitlab/gitlab-ce:latest
+    state: started
+    restart_policy: always
+
+    published_ports:
+      - "9500:80"
+      - "5002:5005"
+
+    volumes:
+      - gitlab_data:/var/opt/gitlab
+
+    env:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url "http://{{ host_ip }}:{{ gitlab_port }}"
+
+        gitlab_rails['initial_root_password'] = '{{ gitlab_root_password }}'
+
+        registry_external_url "http://{{ host_ip }}:{{ registry_port }}"
+        registry['enable'] = true
+        gitlab_rails['registry_enabled'] = true
+        gitlab_rails['packages_enabled'] = true
+
+        nginx['listen_port'] = 80
+        nginx['listen_addresses'] = ['0.0.0.0']
+
+    networks:
+      - name: devsecops-net
+
+# =========================
+# 4. WAIT FOR GITLAB
+# =========================
+- name: Wait for GitLab API
   uri:
-    url: "http://10.22.255.62:9500"
-    status_code: 200
-  register: result
-  until: result.status == 200
-  retries: 30
+    url: "{{ gitlab_url }}/users/sign_in"
+    method: GET
+    status_code: [200, 302]
+  register: gitlab_ready
+  retries: 60
   delay: 10
+  until: gitlab_ready.status in [200,302]
+
+# =========================
+# 5. START RUNNER
+# =========================
+- name: Start GitLab Runner
+  community.docker.docker_container:
+    name: gitlab-runner
+    image: gitlab/gitlab-runner:latest
+    state: started
+    restart_policy: always
+    volumes:
+      - gitlab_runner_data:/etc/gitlab-runner
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - name: devsecops-net
+
+# =========================
+# 6. CREATE ROOT TOKEN
+# =========================
+- name: Generate root token
+  community.docker.docker_container_exec:
+    container: gitlab
+    command: >
+      gitlab-rails runner "puts User.find_by_username('root')
+      .personal_access_tokens.create!(
+        name:'bootstrap',
+        scopes:[:api,:sudo],
+        expires_at:Date.today+365
+      ).token.strip"
+  register: root_token
+
+# =========================
+# 7. STORE ROOT TOKEN
+# =========================
+
+- name: Merge new value safely
+  set_fact:
+    updated_vault: >-
+      {{ vault_data.json.data.data
+         | combine({'gitlab_root_token': root_token.stdout | trim}) }}
+
+- name: Write full Vault object
+  uri:
+    url: "{{ vault_url }}/v1/secret/data/devsecops"
+    method: POST
+    headers:
+      X-Vault-Token: "{{ vault_token }}"
+    body_format: json
+    body:
+      data: "{{ updated_vault }}"
+
+# =========================
+# ENABLE IMPORT SOURCES
+# =========================
+- name: Enable GitLab import sources
+  community.docker.docker_container_exec:
+    container: gitlab
+    command: >
+      gitlab-rails runner "
+      app = ApplicationSetting.last;
+      app.update!(
+        import_sources: [
+          'github',
+          'bitbucket',
+          'bitbucket_server',
+          'fogbugz',
+          'gitlab_project',
+          'gitea',
+          'git'
+        ]
+      );
+      puts 'Import sources enabled';
+      "
+
+# =========================
+# 8. CREATE ADMIN USER
+# =========================
+- name: Create admin user
+  uri:
+    url: "{{ gitlab_url }}/api/v4/users"
+    method: POST
+    headers:
+      PRIVATE-TOKEN: "{{ root_token.stdout | trim }}"
+    body_format: form-urlencoded
+    status_code: [200,201]
+    body:
+      email: "{{ gitlab_admin_email }}"
+      username: "{{ gitlab_admin_username }}"
+      password: "{{ gitlab_admin_password }}"
+      name: "SystemAdmin"
+      admin: "true"
+      skip_confirmation: "true"
+
+# =========================
+# 9. CREATE ADMIN TOKEN
+# =========================
+- name: Create admin PAT
+  community.docker.docker_container_exec:
+    container: gitlab
+    command: >
+      gitlab-rails runner "puts User.find_by_username('{{ gitlab_admin_username }}')
+      .personal_access_tokens.create!(
+        name:'admin-token',
+        scopes:[:api,:read_repository,:write_repository],
+        expires_at:Date.today+365
+      ).token.strip"
+  register: admin_token
+
+# =========================
+# 10. WAIT FOR ADMIN READY (IMPORTANT FIX)
+# =========================
+- name: Wait for admin API readiness
+  uri:
+    url: "{{ gitlab_url }}/api/v4/user"
+    method: GET
+    headers:
+      PRIVATE-TOKEN: "{{ admin_token.stdout | trim }}"
+  register: admin_check
+  retries: 20
+  delay: 5
+  until: admin_check.status == 200
+
+# =========================
+# 11. CREATE PROJECT
+# =========================
+- name: Create import project
+  uri:
+    url: "{{ gitlab_url }}/api/v4/projects"
+    method: POST
+    headers:
+      PRIVATE-TOKEN: "{{ admin_token.stdout | trim }}"
+    body_format: json
+    status_code: [200,201]
+    body:
+      name: "{{ import_project_name }}"
+      visibility: private
+      import_url: "{{ import_url }}"
+
+# =========================
+# 12. CREATE NORMAL USER
+# =========================
+- name: Create normal user
+  uri:
+    url: "{{ gitlab_url }}/api/v4/users"
+    method: POST
+    headers:
+      PRIVATE-TOKEN: "{{ admin_token.stdout | trim }}"
+    body_format: form-urlencoded
+    status_code: [200,201]
+    body:
+      email: "{{ gitlab_user_email }}"
+      username: "{{ gitlab_user_username }}"
+      password: "{{ gitlab_user_password }}"
+      name: "StandardUser"
+      skip_confirmation: "true"
+
+# =========================
+# 13. GET RUNNER TOKEN
+# =========================
+- name: Get runner token
+  community.docker.docker_container_exec:
+    container: gitlab
+    command: >
+      gitlab-rails runner "puts Gitlab::CurrentSettings.current_application_settings.runners_registration_token"
+  register: runner_token
+
+# =========================
+# 14. REGISTER RUNNER (SAFE)
+# =========================
+- name: Check runner exists
+  community.docker.docker_container_exec:
+    container: gitlab
+    command: >
+      gitlab-rails runner "puts Ci::Runner.first&.id"
+  register: runner_check
+
+- name: Register runner
+  when: runner_check.stdout | trim == ""
+  community.docker.docker_container_exec:
+    container: gitlab-runner
+    command: >
+      gitlab-runner register --non-interactive
+      --url "{{ gitlab_url }}"
+      --registration-token "{{ runner_token.stdout | trim }}"
+      --executor docker
+      --docker-image python:3.11-slim
+      --docker-privileged
+      --description "devsecops-runner"
