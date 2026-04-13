@@ -1,0 +1,53 @@
+---
+# tasks file for roles/vault
+- name: Run Vault container
+  docker_container:
+    name: vault
+    image: hashicorp/vault:latest
+    state: started
+    restart_policy: always
+    ports:
+      - "8200:8200"
+    env:
+      VAULT_DEV_ROOT_TOKEN_ID: "{{ vault_token }}"
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+    command: server -dev
+    capabilities:
+      - IPC_LOCK
+
+- name: Wait for Vault to be ready
+  uri:
+    url: "{{ vault_url }}/v1/sys/health"
+    method: GET
+  register: vault_health
+  retries: 10
+  delay: 3
+  until: vault_health.status == 200
+
+- name: Inject secrets into Vault
+  uri:
+    url: "{{ vault_url }}/v1/secret/data/devsecops"
+    method: POST
+    headers:
+      X-Vault-Token: "{{ vault_token }}"
+    body_format: json
+    body:
+      data:
+        gitlab_url: "{{ gitlab_url }}"
+        registry_url: "{{ registry_url }}"
+        dojo_url: "{{ dojo_url }}"
+        root_password: "{{ root_password }}"
+        admin_username: "{{ admin_username }}"
+        admin_password: "{{ admin_password }}"
+        admin_email: "{{ admin_email }}"
+        user_username: "{{ user_username }}"
+        user_password: "{{ user_password }}"
+        user_email: "{{ user_email }}"
+        dockerhub_username: "{{ dockerhub_username }}"
+        dockerhub_pat: "{{ dockerhub_pat }}"
+        import_url: "{{ import_url }}"
+        import_project_name: "{{ import_project_name }}"
+        dojo_admin_user: "{{ dojo_admin_user }}"
+        dojo_admin_password: "{{ dojo_admin_password }}"
+        telegram_token: "{{ telegram_token }}"
+        telegram_chat_id: "{{ telegram_chat_id }}"

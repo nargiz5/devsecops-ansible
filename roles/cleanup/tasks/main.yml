@@ -1,0 +1,59 @@
+- name: Stop known containers
+  community.docker.docker_container:
+    name: "{{ item }}"
+    state: absent
+    force_kill: true
+  loop:
+    - gitlab
+    - gitlab-new2
+    - gitlab-runner
+    - gitlab-runner-new2
+    - vault
+    - uwsgi
+    - nginx
+    - celery
+    - mysql
+    - redis
+    - grafana
+  ignore_errors: true
+- name: Remove ALL Docker volumes
+  command: docker volume prune -f
+
+# Explicit removal of key project volumes
+- name: Remove GitLab and runner volumes
+  community.docker.docker_volume:
+    name: "{{ item }}"
+    state: absent
+  loop:
+    - gitlab_data
+    - gitlab_runner_data
+  ignore_errors: true
+
+
+- name: Remove GitLab volumes safely
+  community.docker.docker_volume:
+    name: "{{ item }}"
+    state: absent
+  loop:
+    - gitlab_gitlab_config
+    - gitlab_gitlab_data
+    - gitlab_gitlab_logs
+    - gitlab_runner_config
+  ignore_errors: true
+
+
+
+- name: Prune unused volumes
+  command: docker volume prune -f
+
+- name: Remove unused networks
+  command: docker network prune -f
+
+- name: Remove project directories
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /var/opt/gitlab
+    - /etc/gitlab-runner
+  ignore_errors: true
