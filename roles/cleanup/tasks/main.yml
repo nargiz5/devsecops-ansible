@@ -41,7 +41,27 @@
     - gitlab_runner_config
   ignore_errors: true
 
+- name: Find DefectDojo containers
+  command: docker ps -aq --filter "name=defectdojo"
+  register: dojo_containers
 
+- name: Remove DefectDojo containers
+  command: docker rm -f {{ item }}
+  loop: "{{ dojo_containers.stdout_lines }}"
+  when: dojo_containers.stdout != ""
+  ignore_errors: true
+
+
+
+- name: Remove DefectDojo volumes
+  community.docker.docker_volume:
+    name: "{{ item }}"
+    state: absent
+  loop:
+    - django-defectdojo_defectdojo_media
+    - django-defectdojo_defectdojo_postgres
+    - django-defectdojo_defectdojo_redis
+  ignore_errors: true
 
 - name: Prune unused volumes
   command: docker volume prune -f

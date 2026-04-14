@@ -1,0 +1,24 @@
+services:
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+    networks:
+      - dojo_net_shared
+    volumes:
+      - grafana_storage:/var/lib/grafana
+      - ./provisioning:/etc/grafana/provisioning
+      - ./dashboards:/var/lib/grafana/dashboards # Ensure this exists for the provider
+
+
+networks:
+  dojo_net_shared:
+    external: true
+    name: django-defectdojo_default
+
+volumes:
+  grafana_storage:

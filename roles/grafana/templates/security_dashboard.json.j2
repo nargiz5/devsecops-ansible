@@ -1,0 +1,105 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "High & Critical Total",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "DefectDojo_Postgres"
+      },
+      "pluginVersion": "9.3.6",
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT count(*) as total FROM dojo_finding WHERE severity IN ('High', 'Critical') AND active = true AND duplicate = false;",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          },
+          "color": { "mode": "fixed", "fixedColor": "red" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "wideLayout": true,
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center"
+      }
+    },
+    {
+      "type": "piechart",
+      "title": "Vulnerability Distribution",
+      "gridPos": { "h": 6, "w": 10, "x": 6, "y": 0 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "DefectDojo_Postgres"
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT severity, count(*) as total FROM dojo_finding WHERE active = true AND duplicate = false GROUP BY severity;",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": true,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "displayLabels": ["percent"],
+        "legend": { "displayMode": "list", "placement": "right", "showLegend": true },
+        "tooltip": { "mode": "single", "sort": "none" }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Recent Vulnerabilities List",
+      "gridPos": { "h": 10, "w": 16, "x": 0, "y": 6 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "DefectDojo_Postgres"
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT f.date AS time, f.title AS \"Finding\", f.severity AS \"Severity\", f.component_name AS \"Component\", t.title AS \"Test\", e.name AS \"Engagement\", CASE WHEN f.false_p = true THEN 'False Positive' WHEN f.risk_accepted = true THEN 'Accepted' ELSE 'Active' END AS \"Status\" FROM dojo_finding f JOIN dojo_test t ON f.test_id = t.id JOIN dojo_engagement e ON t.engagement_id = e.id WHERE f.active = true ORDER BY f.date DESC LIMIT 15;",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "footer": { "showNodes": false, "reducer": ["sum"], "fields": "" }
+      }
+    }
+  ],
+  "schemaVersion": 36,
+  "title": "Security Overview",
+  "tags": ["DevSecOps"],
+  "timezone": "",
+  "weekStart": ""
+}

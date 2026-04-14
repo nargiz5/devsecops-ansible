@@ -1,0 +1,56 @@
+# =========================
+# 1. GET VAULT SECRETS
+# =========================
+- name: Get secrets from Vault
+  uri:
+    url: "{{ vault_url }}/v1/secret/data/devsecops"
+    method: GET
+    headers:
+      X-Vault-Token: "{{ vault_token }}"
+  register: vault_data
+
+# =========================
+# 2. SET FACTS
+# =========================
+- name: Set variables
+  set_fact:
+    gitlab_url: "{{ vault_data.json.data.data.gitlab_url }}"
+    admin_token: "{{ vault_data.json.data.data.gitlab_admin_token }}"
+    project_id: "{{ vault_data.json.data.data.gitlab_project_id }}"
+
+    dojo_url: "{{ vault_data.json.data.data.dojo_url }}"
+    dojo_key: "{{ vault_data.json.data.data.dojo_api_key }}"
+    product_name: "{{ vault_data.json.data.data.dojo_product_name }}"
+    engagement_name: "{{ vault_data.json.data.data.dojo_engagement_name }}"
+
+    registry_url: "{{ vault_data.json.data.data.registry_url }}"
+    registry_user: "{{ vault_data.json.data.data.admin_username }}"
+    registry_pass: "{{ vault_data.json.data.data.admin_password }}"
+
+    telegram_token: "{{ vault_data.json.data.data.telegram_token }}"
+    telegram_chat_id: "{{ vault_data.json.data.data.telegram_chat_id }}"
+
+
+
+# =========================
+# 6. GENERATE CI FILE
+# =========================
+- name: Generate GitLab CI
+  template:
+    src: gitlab-ci.yml.j2
+    dest: /home/intern-3/gitlab-ci.yml
+# =========================
+# 7. PUSH TO GITLAB
+# =========================
+- name: Push CI file
+  uri:
+    url: "{{ gitlab_url }}/api/v4/projects/{{ project_id }}/repository/files/.gitlab-ci.yml"
+    method: PUT
+    headers:
+      PRIVATE-TOKEN: "{{ admin_token }}"
+    body_format: json
+    status_code: [200, 201]
+    body:
+      branch: main
+      commit_message: "Auto DevSecOps pipeline"
+      content: "{{ lookup('file', '/home/intern-3/gitlab-ci.yml') }}"
