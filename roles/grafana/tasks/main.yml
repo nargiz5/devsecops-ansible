@@ -1,0 +1,70 @@
+- name: Get Grafana + Dojo secrets from Vault
+  uri:
+    url: "{{ vault_url }}/v1/secret/data/devsecops"
+    method: GET
+    headers:
+      X-Vault-Token: "{{ vault_token }}"
+  register: vault_data
+
+
+- name: Set Grafana + Dojo variables
+  set_fact:
+    dojo_url: "{{ vault_data.json.data.data.dojo_url }}"
+    dojo_key: "{{ vault_data.json.data.data.dojo_api_key }}"
+
+# -----------------------------
+# 1. CREATE FOLDERS
+# -----------------------------
+- name: Create Grafana provisioning directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - /opt/grafana/provisioning/datasources
+    - /opt/grafana/provisioning/dashboards
+    - /opt/grafana/dashboards
+
+# -----------------------------
+# 2. GENERATE DOCKER COMPOSE
+# -----------------------------
+- name: Generate docker-compose for Grafana
+  template:
+    src: docker-compose.yml.j2
+    dest: /opt/grafana/docker-compose.yml
+    mode: "0644"
+
+# -----------------------------
+# 3. DEPLOY DATASOURCE
+# -----------------------------
+- name: Deploy DefectDojo datasource
+  template:
+    src: ds_dojo.yaml.j2
+    dest: /opt/grafana/provisioning/datasources/ds_dojo.yaml
+    mode: "0644"
+
+# -----------------------------
+# 4. DASHBOARD CONFIG
+# -----------------------------
+- name: Deploy dashboard provider config
+  template:
+    src: dashboard_config.yaml.j2
+    dest: /opt/grafana/provisioning/dashboards/dashboard_config.yaml
+    mode: "0644"
+
+# -----------------------------
+# 5. COPY DASHBOARD
+# -----------------------------
+
+- name: Render security dashboard JSON
+  template:
+    src: security_dashboard.json.j2
+    dest: /opt/grafana/dashboards/security_dashboard.json
+
+# -----------------------------
+# 6. START GRAFANA
+# -----------------------------
+- name: Start Grafana with Docker Compose
+  community.docker.docker_compose_v2:
+    project_src: /opt/grafana
+    state: present

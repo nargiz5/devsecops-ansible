@@ -1,0 +1,192 @@
+#=========================
+# 0. GET SECRETS FROM VAULT
+# =========================
+- name: Get secrets from Vault
+  uri:
+    url: "{{ vault_url }}/v1/secret/data/devsecops"
+    method: GET
+    headers:
+      X-Vault-Token: "{{ vault_token }}"
+  register: vault_data
+
+- name: Set Dojo variables
+  set_fact:
+    dojo_admin_user: "{{ vault_data.json.data.data.dojo_admin_user }}"
+    dojo_admin_password: "{{ vault_data.json.data.data.dojo_admin_password }}"
+    dojo_url: "{{ vault_data.json.data.data.dojo_url }}"
+    import_project_name: "{{ vault_data.json.data.data.import_project_name }}"
+
+# =========================
+# 1. SET VARIABLES
+# =========================
+- name: "[DOJO] Set variables"
+  set_fact:
+    dojo_dir: "/home/intern-3/django-DefectDojo"
+    timestamp: "{{ ansible_date_time.epoch }}"
+    product_name: "{{ import_project_name }}-{{ ansible_date_time.epoch }}"
+    engagement_name: "CI-CD Scan {{ ansible_date_time.epoch }}"
+
+# =========================
+# 2. CLONE / UPDATE REPO
+# =========================
+
+- name: "[DOJO] Ensure DefectDojo repo"
+  become: false
+  git:
+    repo: https://github.com/DefectDojo/django-DefectDojo.git
+    dest: "{{ dojo_dir }}"
+    version: master
+    depth: 1
+    force: yes
+  environment:
+    GIT_HTTP_VERSION: "HTTP/1.1"
+
+
+# =========================
+# 3. RESET DOCKER
+# =========================
+- name: "[DOJO] Stop existing containers"
+  command: docker compose down -v --remove-orphans
+  args:
+    chdir: "{{ dojo_dir }}"
+  ignore_errors: yes
+
+- name: "[DOJO] Prune Docker"
+  command: docker system prune -f
+
+- name: "[DOJO] Wait after cleanup"
+  pause:
+    seconds: 5
+
+# =========================
+# 4. START DOJO
+# =========================
+- name: "[DOJO] Start DefectDojo"
+  command: docker compose up -d
+  args:
+    chdir: "{{ dojo_dir }}"
+
+# =========================
+# 5. WAIT FOR API
+# =========================
+- name: "[DOJO] Wait for UI"
+  uri:
+    url: "{{ dojo_url }}/login"
+    method: GET
+    status_code: 200
+  register: dojo_status
+  retries: 30
+  delay: 10
+  until: dojo_status.status == 200
+
+# =========================
+# 6. CONFIGURE ADMIN USER
+# =========================
+
+- name: "[DOJO] Configure admin user"
+  shell: >
+    docker compose exec -T uwsgi python3 manage.py shell -c
+    "from django.contrib.auth.models import User;
+    user, created = User.objects.get_or_create(username='{{ dojo_admin_user }}');
+    user.set_password('{{ dojo_admin_password }}');
+    user.is_superuser = True;
+    user.is_staff = True;
+    user.save();"
+  args:
+    chdir: "{{ dojo_dir }}"
+  no_log: true
+
+# =========================
+# 7. GET API KEY
+# =========================
+
+- name: "[DOJO] Get API key"
+  shell: >
+    docker compose exec -T uwsgi python3 manage.py shell -c
+    "from rest_framework.authtoken.models import Token;
+    from django.contrib.auth.models import User;
+    user = User.objects.get(username='{{ dojo_admin_user }}');
+    token, created = Token.objects.get_or_create(user=user);
+    print(token.key)"
+  register: api_key_raw
+  args:
+    chdir: "{{ dojo_dir }}"
+  no_log: true
+
+- name: "[DOJO] Extract API key"
+  set_fact:
+    dojo_api_key: "{{ api_key_raw.stdout | regex_search('[a-f0-9]{40}') }}"
+
+# =========================
+# 8. CREATE PRODUCT
+# =========================
+- name: "[DOJO] Create product"
+  uri:
+    url: "{{ dojo_url }}/api/v2/products/"
+    method: POST
+    headers:
+      Authorization: "Token {{ dojo_api_key }}"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      name: "{{ product_name }}"
+      description: "Automated CI Project"
+      prod_type: 1
+    status_code: 201
+  register: product
+
+# =========================
+# 9. CREATE ENGAGEMENT
+# =========================
+- name: "[DOJO] Create engagement"
+  uri:
+    url: "{{ dojo_url }}/api/v2/engagements/"
+    method: POST
+    headers:
+      Authorization: "Token {{ dojo_api_key }}"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      target_start: "{{ ansible_date_time.date }}"
+      target_end: "2026-12-31"
+      product: "{{ product.json.id }}"
+      status: "In Progress"
+      engagement_type: "Interactive"
+      name: "{{ engagement_name }}"
+    status_code: 201
+  register: engagement
+
+# =========================
+# 10. OUTPUT
+# =========================
+- name: "[DOJO] Show results"
+  debug:
+    msg:
+      - "Product ID: {{ product.json.id }}"
+      - "Engagement ID: {{ engagement.json.id }}"
+      - "API Key: {{ dojo_api_key }}"
+
+
+- name: Merge Dojo outputs into Vault
+  set_fact:
+    updated_vault: >-
+      {{ vault_data.json.data.data
+         | combine({
+             'dojo_api_key': dojo_api_key,
+             'dojo_product_id': product.json.id,
+             'dojo_engagement_id': engagement.json.id,
+             'dojo_product_name': product_name,
+             'dojo_engagement_name': engagement_name
+           }) }}
+
+
+- name: Write updated Vault data
+  uri:
+    url: "{{ vault_url }}/v1/secret/data/devsecops"
+    method: POST
+    headers:
+      X-Vault-Token: "{{ vault_token }}"
+    body_format: json
+    body:
+      data: "{{ updated_vault }}"
+
