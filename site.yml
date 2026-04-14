@@ -1,9 +1,13 @@
-- name: DevSecOps local setup
-  hosts: local
-  become: yes
+#- name: DevSecOps local setup
+#  hosts: local
 
+- hosts: localhost
+  become: true
   roles:
-    - cleanup
-    - docker
-    - vault
-    - gitlab
+    - { role: cleanup, tags: cleanup }
+    - { role: docker, tags: docker }
+    - { role: vault, tags: vault }
+    - { role: gitlab, tags: gitlab }
+    - { role: dojo, tags: dojo }
+    - { role: pipeline, tags: pipeline }
+    - { role: grafana, tags: grafana }

@@ -107,25 +107,6 @@
       ).token.strip"
   register: root_token
 
-# =========================
-# 7. STORE ROOT TOKEN
-# =========================
-
-- name: Merge new value safely
-  set_fact:
-    updated_vault: >-
-      {{ vault_data.json.data.data
-         | combine({'gitlab_root_token': root_token.stdout | trim}) }}
-
-- name: Write full Vault object
-  uri:
-    url: "{{ vault_url }}/v1/secret/data/devsecops"
-    method: POST
-    headers:
-      X-Vault-Token: "{{ vault_token }}"
-    body_format: json
-    body:
-      data: "{{ updated_vault }}"
 
 # =========================
 # ENABLE IMPORT SOURCES
@@ -213,6 +194,29 @@
       name: "{{ import_project_name }}"
       visibility: private
       import_url: "{{ import_url }}"
+  register: project
+
+- name: Merge GitLab data into Vault
+  set_fact:
+    updated_vault: >-
+      {{ vault_data.json.data.data
+         | combine({
+             'gitlab_root_token': root_token.stdout | trim,
+             'gitlab_admin_token': admin_token.stdout | trim,
+             'gitlab_project_id': project.json.id,
+             'gitlab_project_url': project.json.web_url | default('')
+           }) }}
+
+- name: Write full Vault object
+  uri:
+    url: "{{ vault_url }}/v1/secret/data/devsecops"
+    method: POST
+    headers:
+      X-Vault-Token: "{{ vault_token }}"
+    body_format: json
+    body:
+      data: "{{ updated_vault }}"
+
 
 # =========================
 # 12. CREATE NORMAL USER
@@ -231,7 +235,7 @@
       password: "{{ gitlab_user_password }}"
       name: "StandardUser"
       skip_confirmation: "true"
-
+  register: normal_user
 # =========================
 # 13. GET RUNNER TOKEN
 # =========================
@@ -264,3 +268,17 @@
       --docker-image python:3.11-slim
       --docker-privileged
       --description "devsecops-runner"
+# =========================
+# 12. ADD NORMAL USER TO PROJECT
+# =========================
+- name: Add normal user to project
+  uri:
+    url: "{{ gitlab_url }}/api/v4/projects/{{ project.json.id }}/members"
+    method: POST
+    headers:
+      PRIVATE-TOKEN: "{{ admin_token.stdout | trim }}"
+    body_format: form-urlencoded
+    status_code: [200, 201, 409]
+    body:
+      user_id: "{{ normal_user.json.id }}"
+      access_level: "20"

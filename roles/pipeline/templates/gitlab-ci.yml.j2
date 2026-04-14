@@ -1,0 +1,54 @@
+stages:
+  - test
+  - upload
+  - gate
+
+variables:
+  DOJO_URL: "{{ dojo_url }}"
+  DOJO_KEY: "{{ dojo_key }}"
+  PRODUCT_NAME: "{{ product_name }}"
+  ENGAGEMENT_NAME: "{{ engagement_name }}"
+  TELEGRAM_TOKEN: "{{ telegram_token }}"
+  TELEGRAM_CHAT_ID: "{{ telegram_chat_id }}"
+
+# =========================
+# GITLAB NATIVE SAST (NO CUSTOM IMAGE)
+# =========================
+include:
+  - template: Security/SAST.gitlab-ci.yml
+
+# --------------------
+# UPLOAD TO DEFECTDOJO
+# --------------------
+upload-test:
+  stage: upload
+  image: curlimages/curl:latest
+  needs:
+    - job: semgrep-sast
+      artifacts: true
+
+  script:
+    - echo "Listing files..."
+    - find . -name "*sast*"
+
+    - FILE="gl-sast-report.json"
+
+    - |
+      if [ ! -f "$FILE" ]; then
+        echo "❌ SAST report not found!"
+        ls -la
+        exit 1
+      fi
+
+    - |
+      curl -X POST "{{ dojo_url }}/api/v2/reimport-scan/" \
+        -H "Authorization: Token {{ dojo_key }}" \
+        -F "active=true" \
+        -F "verified=true" \
+        -F "scan_type=GitLab SAST Report" \
+        -F "minimum_severity=High" \
+        -F "product_name={{ product_name }}" \
+        -F "engagement_name={{ engagement_name }}" \
+        -F "test_title=Semgrep Scan - Test 1" \
+        -F "auto_create_context=true" \
+        -F "file=@$FILE"
