@@ -1,3 +1,18 @@
+# -----------------------------
+# STOP GRAFANA STACK
+# -----------------------------
+- name: Stop Grafana stack
+  community.docker.docker_compose_v2:
+    project_src: /opt/grafana
+    state: absent
+# -----------------------------
+# REMOVE OLD GRAFANA VOLUME
+# -----------------------------
+- name: Remove Grafana volume (reset state)
+  community.docker.docker_volume:
+    name: grafana_storage
+    state: absent
+
 - name: Get Grafana + Dojo secrets from Vault
   uri:
     url: "{{ vault_url }}/v1/secret/data/devsecops"
