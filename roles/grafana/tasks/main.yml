@@ -26,6 +26,8 @@
   set_fact:
     dojo_url: "{{ vault_data.json.data.data.dojo_url }}"
     dojo_key: "{{ vault_data.json.data.data.dojo_api_key }}"
+    dojo_db_password: "{{ vault_data.json.data.data.dojo_db_password }}"
+    grafana_password: "{{ vault_data.json.data.data.grafana_password }}"
 
 # -----------------------------
 # 1. CREATE FOLDERS
