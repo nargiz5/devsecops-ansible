@@ -8,21 +8,21 @@ services:
     restart: always
     hostname: gitlab.local
     ports:
-      - "9500:80"
-      - "5002:5005"
+      - "{{ gitlab_port }}:80"
+      - "{{ registry_port }}:5005"
       - "2222:22"
     environment:
       GITLAB_OMNIBUS_CONFIG: |
-        external_url 'http://10.22.255.62:9500'
-        gitlab_rails['initial_root_password'] = 'devsecops@2026!!'
-        registry_external_url "http://10.22.255.62:5002"
+        external_url 'http://{{ host_ip }}:{{ gitlab_port }}'
+        gitlab_rails['initial_root_password'] = '{{ gitlab_root_password }}'
+        registry_external_url "http://{{ host_ip }}:{{ registry_port }}"
         registry['enable'] = true
         registry_nginx['enable'] = true
         registry_nginx['listen_port'] = 5005
         gitlab_rails['registry_enabled'] = true
-        gitlab_rails['registry_host'] = "10.22.255.62"
+        gitlab_rails['registry_host'] = "{{ host_ip }}"
         gitlab_rails['registry_port'] = 5005
-        gitlab_rails['registry_api_url'] = "http://10.22.255.62:5005"
+        gitlab_rails['registry_api_url'] = "http://{{ host_ip }}:5005"
         gitlab_rails['packages_enabled'] = true
         nginx['listen_port'] = 80
         nginx['listen_addresses'] = ['0.0.0.0']
@@ -48,4 +48,3 @@ volumes:
   gitlab_logs:
   gitlab_data:
   runner_config:
-
