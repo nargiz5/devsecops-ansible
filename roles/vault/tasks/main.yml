@@ -49,5 +49,7 @@
         import_project_name: "{{ import_project_name }}"
         dojo_admin_user: "{{ dojo_admin_user }}"
         dojo_admin_password: "{{ dojo_admin_password }}"
+        dojo_db_password: "{{ dojo_db_password }}"
+        grafana_password: "{{ grafana_password }}"
         telegram_token: "{{ telegram_token }}"
         telegram_chat_id: "{{ telegram_chat_id }}"
