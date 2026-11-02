@@ -28,6 +28,23 @@ Every role after `vault` follows the same pattern: **pull secrets → do the wor
 
 ---
 
+## 🔄 Provisioning Flow
+
+```mermaid
+flowchart LR
+    S[site.yml] --> C0[cleanup]
+    C0 --> V[vault: dev server + seed secrets]
+    V --> G[gitlab + runner]
+    G --> D[dojo: DefectDojo]
+    D --> P[pipeline: render .gitlab-ci.yml]
+    P --> GR[grafana: dashboards]
+    V -. read secrets via API .-> G
+    V -. read secrets via API .-> D
+    V -. read secrets via API .-> P
+```
+
+---
+
 ## 🧰 Stack
 
 | Component | Role file | Notes |
