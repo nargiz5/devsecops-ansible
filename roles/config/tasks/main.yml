@@ -68,7 +68,7 @@
 # 8. Create group
 - name: Create devsecops-test group
   uri:
-    url: "http://10.22.255.62:9500/api/v4/groups"
+    url: "http://{{ host_ip }}:{{ gitlab_port }}/api/v4/groups"
     method: POST
     headers:
       PRIVATE-TOKEN: "{{ gitlab_token }}"
@@ -88,7 +88,7 @@
 # 10. Import project
 - name: Import project into group
   uri:
-    url: "http://10.22.255.62:9500/api/v4/projects"
+    url: "http://{{ host_ip }}:{{ gitlab_port }}/api/v4/projects"
     method: POST
     headers:
       PRIVATE-TOKEN: "{{ gitlab_token }}"
@@ -101,7 +101,7 @@
 
 - name: Wait for project import to finish
   uri:
-    url: "http://10.22.255.62:9500/api/v4/projects/devsecops-test%2Fdjango-devsecops"
+    url: "http://{{ host_ip }}:{{ gitlab_port }}/api/v4/projects/devsecops-test%2Fdjango-devsecops"
     method: GET
     headers:
       PRIVATE-TOKEN: "{{ gitlab_token }}"

@@ -188,4 +188,4 @@ Available tags: `cleanup`, `docker`, `vault`, `gitlab`, `dojo`, `pipeline`, `gra
 
 ## 📄 License
 
-This project is intended for educational and lab use.
+Released under the [MIT License](LICENSE). Intended for educational and lab use.
