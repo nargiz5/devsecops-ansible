@@ -71,9 +71,7 @@ devsecops-ansible/
     ├── cleanup/tasks/
     ├── docker/tasks/
     ├── vault/tasks/
-    ├── gitlab/
-    │   ├── tasks/
-    │   └── templates/docker-compose.yml.j2   # reference only, not invoked by tasks/main.yml
+    ├── gitlab/tasks/
     ├── dojo/tasks/
     ├── pipeline/
     │   ├── tasks/
