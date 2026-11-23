@@ -99,7 +99,7 @@ At runtime, the flow is:
 
 ### ⚠️ About the `group_vars/all.yml` in this repo
 
-The `group_vars/all.yml` committed here is encrypted with a vault password that is **no longer available**. It cannot be decrypted by anyone, including the original author, and it is kept in the repo purely as a structural reference — **do not attempt to use it**.
+The `group_vars/all.yml` committed here is encrypted with Ansible Vault and is kept only as a reference for the expected variable structure. It is not meant to be decrypted or reused.
 
 **Every user must generate their own `group_vars/all.yml`** before running this playbook:
 
@@ -145,6 +145,8 @@ telegram_chat_id: <your-telegram-chat-id>
 ```
 
 Save and exit — Ansible Vault encrypts the file automatically. There is no shared or default vault password; each user creates and keeps their own.
+
+The pipeline scans [django.nv](https://gitlab.practical-devsecops.training/pdso/django.nv), an intentionally vulnerable Django application published by Practical DevSecOps, which `import_url` points to.
 
 ---
 
@@ -192,12 +194,14 @@ Available tags: `cleanup`, `docker`, `vault`, `gitlab`, `dojo`, `pipeline`, `gra
 
 ## ⚠️ Security Notes
 
-- **The `group_vars/all.yml` in this repo is permanently undecryptable** (vault password lost) and is kept only as a reference for the expected variable structure. Never assume an encrypted file you find in a public repo is safe to rely on — always generate your own.
+- **The encrypted `group_vars/all.yml` in this repo is a structural reference only.** Always create your own with `ansible-vault create`; never rely on an encrypted file found in a public repository.
 - **Never commit `group_vars/all.yml` unencrypted.** If you ever save it with `ansible-vault` disabled, rotate every credential inside it immediately and re-encrypt.
 - The Vault instance here runs in **dev mode** (`vault server -dev`) for lab convenience — it auto-unseals and is not meant for production use. Swap in a properly initialized, unsealed Vault before using this outside a lab.
 - `roles/cleanup` force-removes containers and volumes by name — review the list before running it against anything other than this lab's own stack.
 - Rotate the vault password itself periodically, and never reuse it as a service password elsewhere in the stack.
-- All secrets that were previously hardcoded in template files (`ds_dojo.yaml.j2`, `grafana/docker-compose.yml.j2`) have been parameterized to read from Vault via `dojo_db_password` and `grafana_password` — no plain-text credentials remain in any tracked file.
+- All service passwords are read from Vault (for example `dojo_db_password` and `grafana_password`); no plain-text credentials are stored in tracked files.
+- **Lab shortcut:** the rendered `.gitlab-ci.yml` embeds the DefectDojo API key, registry credentials and Telegram token as plain CI variables, so anyone with read access to the GitLab project can see them. In production, store these as masked and protected GitLab CI/CD variables instead.
+- Container images use the `:latest` tag for convenience. Pin exact versions or digests for reproducible and supply-chain-safe deployments.
 
 ---
 
