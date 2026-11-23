@@ -164,7 +164,7 @@
     msg:
       - "Product ID: {{ product.json.id }}"
       - "Engagement ID: {{ engagement.json.id }}"
-      - "API Key: {{ dojo_api_key }}"
+      - "API key stored in Vault (not printed)"
 
 
 - name: Merge Dojo outputs into Vault
