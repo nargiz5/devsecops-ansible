@@ -51,9 +51,6 @@
     chdir: "{{ dojo_dir }}"
   ignore_errors: yes
 
-- name: "[DOJO] Prune Docker"
-  command: docker system prune -f
-
 - name: "[DOJO] Wait after cleanup"
   pause:
     seconds: 5

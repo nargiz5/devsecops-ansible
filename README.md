@@ -1,6 +1,6 @@
 # ⚙️ DevSecOps Ansible Automation
 
-An Ansible-native reimplementation of the [DevSecOps Pipeline Suite](https://github.com/nargiz5/devsecops-pipeline) — the same Vault → GitLab → DefectDojo → Grafana security stack, but provisioned through idempotent, taggable Ansible roles instead of a monolithic bash script.
+An Ansible-native reimplementation of the [DevSecOps Pipeline Suite](https://github.com/nargiz5/devsecops-pipeline) — the same Vault → GitLab → DefectDojo → Grafana security stack, but provisioned through taggable Ansible roles that rebuild the stack from a clean state, instead of a monolithic bash script.
 
 Where the original bootstraps everything with `bootstrap.sh` and static `.env` values, this version treats **Vault as a live secret store**: each role fetches what it needs from Vault at runtime and writes new secrets (tokens, API keys, project IDs) back into it as the stack comes online.
 
@@ -55,7 +55,7 @@ flowchart LR
 | **DefectDojo** | `roles/dojo` | Cloned from upstream, brought up via its own `docker compose`, configured via Django shell |
 | **Pipeline generation** | `roles/pipeline` | Renders and pushes `.gitlab-ci.yml` dynamically from Vault-sourced values |
 | **Grafana** | `roles/grafana` | Provisioning (datasource + dashboard) fully templated and regenerated on each run |
-| **Cleanup** | `roles/cleanup` | Idempotency helper — tears down known containers/volumes before a fresh run |
+| **Cleanup** | `roles/cleanup` | Tears down this stack's known containers and volumes before a fresh run (other Docker data on the host is left alone) |
 
 ---
 

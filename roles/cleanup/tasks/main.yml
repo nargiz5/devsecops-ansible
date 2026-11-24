@@ -16,8 +16,6 @@
     - redis
     - grafana
   ignore_errors: true
-- name: Remove ALL Docker volumes
-  command: docker volume prune -f
 
 # Explicit removal of key project volumes
 - name: Remove GitLab and runner volumes
@@ -62,12 +60,6 @@
     - django-defectdojo_defectdojo_postgres
     - django-defectdojo_defectdojo_redis
   ignore_errors: true
-
-- name: Prune unused volumes
-  command: docker volume prune -f
-
-- name: Remove unused networks
-  command: docker network prune -f
 
 - name: Remove project directories
   file:
