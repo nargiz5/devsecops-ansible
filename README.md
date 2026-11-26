@@ -163,6 +163,8 @@ Available tags: `cleanup`, `docker`, `vault`, `gitlab`, `dojo`, `pipeline`, `gra
 - `roles/cleanup` force-removes containers and volumes by name — review the list before running it against anything other than this lab's own stack.
 - Rotate the vault password itself periodically, and never reuse it as a service password elsewhere in the stack.
 - All service passwords are read from Vault (for example `dojo_db_password` and `grafana_password`); no plain-text credentials are stored in tracked files.
+- **The security gate fails closed.** It only checks the findings of the current DefectDojo import, and if DefectDojo cannot be queried or returns an unexpected answer, the pipeline fails instead of passing.
+- **Secrets stay out of Ansible output.** Every task that handles a password, token or API key runs with `no_log: true`.
 - **Lab shortcut:** the rendered `.gitlab-ci.yml` embeds the DefectDojo API key, registry credentials and Telegram token as plain CI variables, so anyone with read access to the GitLab project can see them. In production, store these as masked and protected GitLab CI/CD variables instead.
 - Container images use the `:latest` tag for convenience. Pin exact versions or digests for reproducible and supply-chain-safe deployments.
 

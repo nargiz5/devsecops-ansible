@@ -22,15 +22,13 @@ include:
 # --------------------
 upload-test:
   stage: upload
-  image: curlimages/curl:latest
+  image: alpine:3.20
   needs:
     - job: semgrep-sast
       artifacts: true
 
   script:
-    - echo "Listing files..."
-    - find . -name "*sast*"
-
+    - apk add --no-cache curl jq > /dev/null
     - FILE="gl-sast-report.json"
 
     - |
@@ -41,60 +39,82 @@ upload-test:
       fi
 
     - |
-      curl -X POST "{{ dojo_url }}/api/v2/reimport-scan/" \
-        -H "Authorization: Token {{ dojo_key }}" \
+      HTTP_CODE=$(curl -s -o dojo-import.json -w '%{http_code}' \
+        -X POST "$DOJO_URL/api/v2/reimport-scan/" \
+        -H "Authorization: Token $DOJO_KEY" \
         -F "active=true" \
         -F "verified=true" \
         -F "scan_type=GitLab SAST Report" \
         -F "minimum_severity=High" \
-        -F "product_name={{ product_name }}" \
-        -F "engagement_name={{ engagement_name }}" \
+        -F "product_name=$PRODUCT_NAME" \
+        -F "engagement_name=$ENGAGEMENT_NAME" \
         -F "test_title=Semgrep Scan - Test 1" \
         -F "auto_create_context=true" \
-        -F "file=@$FILE"
+        -F "file=@$FILE")
+      case "$HTTP_CODE" in
+        200|201) ;;
+        *) echo "❌ DefectDojo import failed (HTTP $HTTP_CODE)"; cat dojo-import.json; exit 1 ;;
+      esac
+
+      # The gate checks only the findings of this import, not every product that uses the same test title
+      TEST_ID=$(jq -r '.test_id // .test // empty' dojo-import.json)
+      if [ -z "$TEST_ID" ]; then
+        echo "❌ DefectDojo did not return a test id"
+        exit 1
+      fi
+      echo "DOJO_TEST_ID=$TEST_ID" > dojo.env
+
+  artifacts:
+    reports:
+      dotenv: dojo.env
 
 # --- SECURITY GATE ---
 security-gate:
   stage: gate
-  image: curlimages/curl:latest
+  image: alpine:3.20
   needs: ["upload-test"]
 
   script:
+    - apk add --no-cache curl jq > /dev/null
     - |
-      echo "🔍 Verifying security status for Test 1..."
+      echo "🔍 Verifying security status for DefectDojo test $DOJO_TEST_ID..."
 
-      # 1. Query DefectDojo
-      RESPONSE=$(curl -s -H "Authorization: Token $DOJO_KEY" \
-        "$DOJO_URL/api/v2/findings/?active=true&verified=true&test__title=Semgrep%20Scan%20-%20Test%201")
+      # 1. Query DefectDojo. The gate fails closed: no valid answer means no pass.
+      HTTP_CODE=$(curl -s -o findings.json -w '%{http_code}' \
+        -H "Authorization: Token $DOJO_KEY" \
+        "$DOJO_URL/api/v2/findings/?active=true&verified=true&test=$DOJO_TEST_ID&limit=5")
+      if [ "$HTTP_CODE" != "200" ]; then
+        echo "❌ Could not query DefectDojo (HTTP $HTTP_CODE). Failing closed."
+        exit 1
+      fi
 
-      # 2. Extract count safely
-      COUNT=$(echo "$RESPONSE" | grep -o '"count":[0-9]*' | cut -d: -f2)
-      COUNT=${COUNT:-0}
-
+      # 2. The count must be a number; anything else also fails closed
+      if ! COUNT=$(jq -e '.count | numbers' findings.json); then
+        echo "❌ Unexpected response from DefectDojo. Failing closed."
+        exit 1
+      fi
       echo "Findings Count: $COUNT"
 
       if [ "$COUNT" -gt 0 ]; then
+        HASHES=$(jq -r '.results[].hash_code' findings.json | head -n 5)
+        MSG="❌ Security Gate Failed (Test 1)
+      Found $COUNT active High vulnerabilities.
 
-        HASHES=$(echo "$RESPONSE" | grep -o '"hash_code":"[^"]*"' | cut -d'"' -f4 | head -n 5)
+      Top Hashes:
+      $HASHES
 
-        MSG="❌ Security Gate Failed (Test 1)\nFound $COUNT active High vulnerabilities.\n\nTop Hashes:\n$HASHES\n\nPipeline blocked."
-
+      Pipeline blocked."
       else
-
-        MSG="✅ Security Gate Passed (Test 1)\nNo active findings (All fixed or False Positive)."
-
+        MSG="✅ Security Gate Passed (Test 1)
+      No active findings (All fixed or False Positive)."
       fi
 
-      # Encode for Telegram
-      ENCODED_MSG=$(echo "$MSG" | sed ':a;N;$!ba;s/\n/%0A/g')
-
-      # Send Telegram message
+      # 3. Send Telegram message (--data-urlencode keeps the line breaks)
       curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendMessage" \
-        -d "chat_id=$TELEGRAM_CHAT_ID" \
-        -d "text=$ENCODED_MSG"
-        
+        --data-urlencode "chat_id=$TELEGRAM_CHAT_ID" \
+        --data-urlencode "text=$MSG" > /dev/null
 
-      # Block the pipeline when High findings exist
+      # 4. Block the pipeline when High findings exist
       if [ "$COUNT" -gt 0 ]; then
         echo "Security gate failed: $COUNT active High findings."
         exit 1
