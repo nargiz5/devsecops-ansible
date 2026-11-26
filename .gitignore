@@ -8,6 +8,7 @@
 .vault_pass*
 vault_password*
 group_vars/*.dec.yml
+group_vars/all.yml
 
 # Logs / temp
 *.log

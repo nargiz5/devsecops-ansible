@@ -66,7 +66,7 @@ devsecops-ansible/
 ├── site.yml                  # Master playbook — orchestrates all roles against localhost
 ├── inventory.ini             # Single-host local inventory
 ├── group_vars/
-│   └── all.yml                # Ansible Vault–encrypted variables (AES256) — see below
+│   └── all.yml.example        # Variable template; copy to all.yml and encrypt with Ansible Vault
 └── roles/
     ├── cleanup/tasks/
     ├── docker/tasks/
@@ -97,54 +97,17 @@ At runtime, the flow is:
 2. Every subsequent role (`gitlab`, `dojo`, `pipeline`, `grafana`) reads what it needs from Vault over its HTTP API using `vault_token`, rather than referencing Ansible variables directly
 3. Roles that generate new credentials (GitLab tokens, DefectDojo API keys, project IDs) merge them back into the same Vault path, so the running environment's state is always retrievable from Vault — not scattered across role outputs
 
-### ⚠️ About the `group_vars/all.yml` in this repo
+### Creating `group_vars/all.yml`
 
-The `group_vars/all.yml` committed here is encrypted with Ansible Vault and is kept only as a reference for the expected variable structure. It is not meant to be decrypted or reused.
-
-**Every user must generate their own `group_vars/all.yml`** before running this playbook:
+The repository ships only `group_vars/all.yml.example`, a template with placeholder values. `group_vars/all.yml` itself is git-ignored. Create your own encrypted copy before running the playbook:
 
 ```bash
-rm group_vars/all.yml
-ansible-vault create group_vars/all.yml
+cp group_vars/all.yml.example group_vars/all.yml
+# replace every placeholder with your own values, then:
+ansible-vault encrypt group_vars/all.yml
 ```
 
-This opens an editor and prompts you to set your own new vault password (choose a strong one — you'll need it every time you run the playbook). Paste in the following structure with your own values:
-
-```yaml
-host_ip: <your-server-ip>
-
-vault_token: <choose-a-strong-token>
-vault_url: http://<your-server-ip>:8200
-
-dockerhub_username: <your-dockerhub-username>
-dockerhub_pat: <your-dockerhub-personal-access-token>
-
-gitlab_port: 9500
-registry_port: 5002
-root_password: <choose-a-strong-password>
-admin_username: adminuser
-admin_password: <choose-a-strong-password>
-admin_email: admin@example.com
-user_username: normaluser
-user_password: <choose-a-strong-password>
-user_email: user@example.com
-import_url: https://gitlab.practical-devsecops.training/pdso/django.nv.git
-import_project_name: django-nv-import
-gitlab_url: http://<your-server-ip>:9500
-registry_url: <your-server-ip>:5002
-
-dojo_port: 8080
-dojo_admin_user: admin
-dojo_admin_password: <choose-a-strong-password>
-dojo_db_password: <choose-a-strong-password>
-
-grafana_password: <choose-a-strong-password>
-
-telegram_token: <your-telegram-bot-token>
-telegram_chat_id: <your-telegram-chat-id>
-```
-
-Save and exit — Ansible Vault encrypts the file automatically. There is no shared or default vault password; each user creates and keeps their own.
+Choose a strong vault password; you will need it every time you run the playbook. There is no shared or default vault password; each user creates and keeps their own.
 
 The pipeline scans [django.nv](https://gitlab.practical-devsecops.training/pdso/django.nv), an intentionally vulnerable Django application published by Practical DevSecOps, which `import_url` points to.
 
@@ -171,7 +134,7 @@ cd devsecops-ansible
 
 ### 2. Create your own secrets file
 
-Follow the **"About the `group_vars/all.yml` in this repo"** section above to generate your own encrypted `group_vars/all.yml`.
+Follow the **"Creating `group_vars/all.yml`"** section above to generate your own encrypted `group_vars/all.yml`.
 
 ### 3. Run the full playbook
 
@@ -194,7 +157,7 @@ Available tags: `cleanup`, `docker`, `vault`, `gitlab`, `dojo`, `pipeline`, `gra
 
 ## ⚠️ Security Notes
 
-- **The encrypted `group_vars/all.yml` in this repo is a structural reference only.** Always create your own with `ansible-vault create`; never rely on an encrypted file found in a public repository.
+- **Only a template is committed.** `group_vars/all.yml` is git-ignored, so an encrypted secrets file never ends up in the repository.
 - **Never commit `group_vars/all.yml` unencrypted.** If you ever save it with `ansible-vault` disabled, rotate every credential inside it immediately and re-encrypt.
 - The Vault instance here runs in **dev mode** (`vault server -dev`) for lab convenience — it auto-unseals and is not meant for production use. Swap in a properly initialized, unsealed Vault before using this outside a lab.
 - `roles/cleanup` force-removes containers and volumes by name — review the list before running it against anything other than this lab's own stack.

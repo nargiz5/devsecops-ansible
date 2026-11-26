@@ -1,0 +1,35 @@
+# Template for group_vars/all.yml.
+# Copy to group_vars/all.yml, replace every placeholder, then run:
+#   ansible-vault encrypt group_vars/all.yml
+
+host_ip: <your-server-ip>
+
+vault_token: <choose-a-strong-token>
+vault_url: http://<your-server-ip>:8200
+
+dockerhub_username: <your-dockerhub-username>
+dockerhub_pat: <your-dockerhub-personal-access-token>
+
+gitlab_port: 9500
+registry_port: 5002
+root_password: <choose-a-strong-password>
+admin_username: adminuser
+admin_password: <choose-a-strong-password>
+admin_email: admin@example.com
+user_username: normaluser
+user_password: <choose-a-strong-password>
+user_email: user@example.com
+import_url: https://gitlab.practical-devsecops.training/pdso/django.nv.git
+import_project_name: django-nv-import
+gitlab_url: http://<your-server-ip>:9500
+registry_url: <your-server-ip>:5002
+
+dojo_port: 8080
+dojo_admin_user: admin
+dojo_admin_password: <choose-a-strong-password>
+dojo_db_password: <choose-a-strong-password>
+
+grafana_password: <choose-a-strong-password>
+
+telegram_token: <your-telegram-bot-token>
+telegram_chat_id: <your-telegram-chat-id>
