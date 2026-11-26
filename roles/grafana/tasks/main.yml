@@ -20,6 +20,7 @@
     headers:
       X-Vault-Token: "{{ vault_token }}"
   register: vault_data
+  no_log: true
 
 
 - name: Set Grafana + Dojo variables
@@ -32,6 +33,7 @@
 # -----------------------------
 # 1. CREATE FOLDERS
 # -----------------------------
+  no_log: true
 - name: Create Grafana provisioning directories
   file:
     path: "{{ item }}"

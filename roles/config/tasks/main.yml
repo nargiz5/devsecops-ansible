@@ -18,6 +18,7 @@
       "
 
 # 3. Get runner registration token
+  no_log: true
 - name: Get runner token
   community.docker.docker_container_exec:
     container: gitlab
@@ -26,11 +27,13 @@
   register: runner_token_raw
 
 # 4. Save token
+  no_log: true
 - name: Set runner token fact
   set_fact:
     runner_token: "{{ runner_token_raw.stdout }}"
 
 # 5. Register GitLab Runner
+  no_log: true
 - name: Register runner
   community.docker.docker_container_exec:
     container: gitlab-runner
@@ -45,6 +48,7 @@
       --docker-privileged
 
 # 6. Create Personal Access Token (AUTO)
+  no_log: true
 - name: Create GitLab PAT
   community.docker.docker_container_exec:
     container: gitlab
@@ -62,10 +66,12 @@
 
 
 # 7. Save PAT token
+  no_log: true
 - set_fact:
     gitlab_token: "{{ pat_token_raw.stdout }}"
 
 # 8. Create group
+  no_log: true
 - name: Create devsecops-test group
   uri:
     url: "http://{{ host_ip }}:{{ gitlab_port }}/api/v4/groups"
@@ -81,6 +87,7 @@
   register: group
 
 # 9. Get group id (safe)
+  no_log: true
 - name: Extract group id
   set_fact:
     group_id: "{{ group.json.id if group.json is defined else 0 }}"
@@ -98,6 +105,7 @@
       import_url: "https://gitlab.practical-devsecops.training/pdso/django.nv.git"
       namespace_id: "{{ group_id }}"
     status_code: [201, 409]
+  no_log: true
 
 - name: Wait for project import to finish
   uri:
@@ -109,3 +117,4 @@
   retries: 20
   delay: 10
   until: project_status.json.import_status == "finished"
+  no_log: true

@@ -12,6 +12,7 @@
 # =========================
 # 2. SET FACTS
 # =========================
+  no_log: true
 - name: Set variables
   set_fact:
     gitlab_url: "{{ vault_data.json.data.data.gitlab_url }}"
@@ -35,6 +36,7 @@
 # =========================
 # 6. GENERATE CI FILE
 # =========================
+  no_log: true
 - name: Generate GitLab CI
   template:
     src: gitlab-ci.yml.j2
@@ -54,3 +56,4 @@
       branch: main
       commit_message: "Auto DevSecOps pipeline"
       content: "{{ lookup('file', '/home/intern-3/gitlab-ci.yml') }}"
+  no_log: true

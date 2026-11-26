@@ -53,6 +53,7 @@
   community.docker.docker_login:
     username: "{{ dockerhub_username }}"
     password: "{{ dockerhub_pat }}"
+  no_log: true
 
 - name: Define insecure registry
   set_fact:

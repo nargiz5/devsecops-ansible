@@ -8,6 +8,7 @@
     headers:
       X-Vault-Token: "{{ vault_token }}"
   register: vault_data
+  no_log: true
 
 - name: Set Dojo variables
   set_fact:
@@ -19,6 +20,7 @@
 # =========================
 # 1. SET VARIABLES
 # =========================
+  no_log: true
 - name: "[DOJO] Set variables"
   set_fact:
     dojo_dir: "/home/intern-3/django-DefectDojo"
@@ -117,6 +119,7 @@
 # =========================
 # 8. CREATE PRODUCT
 # =========================
+  no_log: true
 - name: "[DOJO] Create product"
   uri:
     url: "{{ dojo_url }}/api/v2/products/"
@@ -135,6 +138,7 @@
 # =========================
 # 9. CREATE ENGAGEMENT
 # =========================
+  no_log: true
 - name: "[DOJO] Create engagement"
   uri:
     url: "{{ dojo_url }}/api/v2/engagements/"
@@ -156,6 +160,7 @@
 # =========================
 # 10. OUTPUT
 # =========================
+  no_log: true
 - name: "[DOJO] Show results"
   debug:
     msg:
@@ -175,6 +180,7 @@
              'dojo_product_name': product_name,
              'dojo_engagement_name': engagement_name
            }) }}
+  no_log: true
 
 
 - name: Write updated Vault data
@@ -186,4 +192,5 @@
     body_format: json
     body:
       data: "{{ updated_vault }}"
+  no_log: true
 
